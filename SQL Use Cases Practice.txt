@@ -1,0 +1,4 @@
+SQL Practice Use Cases: 
+
+1. Find out the names, email, CSID of the SME according to the batch names
+2. 

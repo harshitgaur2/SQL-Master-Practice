@@ -1,0 +1,159 @@
+[Yesterday 12:30 PM] Akanksha Dwivedi
+
+with Coordinator as (
+
+select distinct pm.batchId,STRING_AGG(pmc.firstName+' '+pmc.lastName, ', ') WITHIN GROUP (ORDER BY pmc.firstName+' '+pmc.lastName DESC) AS Coordinator_name
+
+from  Lcore_portal.[dbo].[Batch_PMCoordinatorMappings] pm
+
+left join Lcore_portal.[dbo].[Master_PMCoordinators] pmc1
+
+on pm.pmCoordinatorId=pmc1.id
+
+left join Lcore_portal.dbo.Users pmc
+
+on pmc1.userid=pmc.userId
+
+group by pm.batchId),
+
+POD_LEAD as (
+
+select distinct pm.programId ,STRING_AGG(pmc.firstName+' '+pmc.lastName, ', ') WITHIN GROUP (ORDER BY pmc.firstName+' '+pmc.lastName DESC) AS LEARNING_PARTNER,
+
+max(cast( pmc1.isActive as int)) POD_LEAD_STATUS
+
+from  Lcore_portal.[dbo].ProgramLearningPartnerMappings pm
+
+left join Lcore_portal.[dbo].[Master_PODleads] pmc1
+
+on pm.podLead=pmc1.id
+
+left join  Lcore_portal.[dbo].Users pmc
+
+on pmc1.userid=pmc.userId
+
+group by pm.programId),
+
+schedule_mstr as(
+
+select * from 
+
+Lcore_portal.[dbo].[LP_Schedules]
+
+where startTime<>'NA' and endtime <>'NA'
+
+and isActive=1
+
+and categoryId<=2),
+
+Master_ds as (
+
+select Convert(date, s.startDate AT TIME ZONE 'India Standard Time')
+
+AS startDate, Convert(date, s.endDate AT TIME ZONE 'India Standard Time') endDate,p.id program_id,
+
+p.name Program_name, b.name Batch_name,isnull((u.firstName +' ' + u.lastName),c.name) participantName,isnull(u.email,c.personalEmailId) email
+
+,u.oracleId,
+
+mstya.name status,ls.attributeId,ls.categoryId,ls.learningPlanId,Coordinator_name,p.fkprogramTypeId,b.id batch_id,u.userName NT_LOGIN,
+
+u.career_setting_id,mpt.type PROGRAM_TYPE,Convert(date,a.sessionDate AT TIME ZONE 'India Standard Time') ATTENDANCE_SESSION_DATE,Convert(date,b.startDate AT TIME ZONE 'India Standard Time') Batch_start_date,
+
+Convert(date,b.enddate AT TIME ZONE 'India Standard Time') Batch_end_date,
+
+b.duration Batch_duration,
+
+isnull(a.durationAttended,DATEDIFF(MINUTE, s.startTime , s.endTime)/cast(60 as float)) Session_Duration
+
+from 
+
+schedule_mstr s
+
+left join Lcore_portal.[dbo].[Master_LearningPlanTypes] lp
+
+on s.categoryId=lp.[id]
+
+left join Lcore_portal.[dbo].[LR_Participant_Attendances] a
+
+on s.id=a.scheduleId
+
+and s.batchId=a.batchid
+
+and s.programid=a.programid
+
+left join Lcore_portal.[dbo].[Master_StatusTypes] mstya on a.status=mstya.id and mstya.type='Attendance' 
+
+left join Lcore_portal.[dbo].[BatchCandidates] c
+
+on a.participantId=c.id
+
+left join Lcore_portal.[dbo].[Users] u
+
+on u.userId=c.userId
+
+left join Lcore_portal.[dbo].[LearningPlanSequences] ls
+
+on ls.[categoryId]= s.[categoryId]
+
+and ls.[attributeId]=s.[attributeId]
+
+left join Lcore_portal.[dbo].[LearningPlans] lps
+
+on lps.learningPlanId=ls.learningPlanId
+
+left join Lcore_portal.[dbo].[Programs] p
+
+on p.id=lps.programId
+
+and a.programId=p.id
+
+left join  Lcore_portal.[dbo].[Batches] b
+
+on lps.batchId=b.id
+
+and a.batchId=b.id
+
+left join Coordinator co
+
+on co.batchId=b.id
+
+left join Lcore_portal.[dbo].[Master_ProgramTypes] mpt
+
+on p.fkprogramTypeId=mpt.id
+
+left join Lcore_portal.[dbo].[LP_Schedule_RecurringDates] rd
+
+on rd.fkScheduleId=a.scheduleId
+
+left join pod_lead
+
+on pod_lead.programId=s.programid
+
+)
+
+select distinct m.* ,d.topic,d.duration Total_Session_dur,d.learningMode
+
+from Master_ds m
+
+left join Lcore_portal.[dbo].[LearningPlan_Sessions] d
+
+on m.attributeId=d.sessionId
+
+and m.learningPlanId=d.learningPlanId
+
+where  categoryId=1
+
+union
+
+select distinct m.* ,d.topic,d.duration Total_Session_dur,d.learningMode
+
+from Master_ds m
+
+left join Lcore_portal.[dbo].[LearningPlan_Workshops] d
+
+on m.attributeId=d.workshopid
+
+and m.learningPlanId=d.learningPlanId
+
+where categoryId=2
